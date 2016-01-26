@@ -87,6 +87,10 @@ info() {
     echo "$(now)INFO: $*"
 }
 
+readlink-f() {
+	python -c 'import os,sys; print os.path.abspath(sys.argv[1]);' "$1"
+}
+
 # Hard coded configuration
 local_backup="no"
 backup_root=/var/lib/pgsql/backups
@@ -189,7 +193,7 @@ stop_backup() {
 
     # Tell PostgreSQL the backup is done
     info "stopping the backup process"
-    $psql_command -Atc "SELECT pg_stop_backup();" $psql_condb >/dev/null
+    $psql_command -Atc "SELECT pg_stop_backup();" $psql_condb
     if [ $? != 0 ]; then
 	error_and_hook "could not stop backup process"
     fi
@@ -342,7 +346,7 @@ case $storage in
 
 	info "archiving $pgdata"
 	if [ $local_backup = "yes" ]; then
-	    tar -cpf - --ignore-failed-read --exclude=pg_xlog --exclude='postmaster.*' --exclude='pgsql_tmp' * 2>/dev/null | $compress_bin > $backup_dir/pgdata.tar.$compress_suffix
+	    gnutar -cpf - --ignore-failed-read --exclude=pg_xlog --exclude='postmaster.*' --exclude='pgsql_tmp' * | $compress_bin > $backup_dir/pgdata.tar.$compress_suffix
 	    rc=(${PIPESTATUS[*]})
 	    tar_rc=${rc[0]}
 	    compress_rc=${rc[1]}
@@ -350,7 +354,7 @@ case $storage in
 		error_and_hook "could not tar PGDATA"
 	    fi
 	else
-	    tar -cpf - --ignore-failed-read --exclude=pg_xlog --exclude='postmaster.*' --exclude='pgsql_tmp' * 2>/dev/null | $compress_bin | ssh ${ssh_user:+$ssh_user@}$target "cat > $backup_dir/pgdata.tar.$compress_suffix" 2>/dev/null
+	    gnutar -cpf - --ignore-failed-read --exclude=pg_xlog --exclude='postmaster.*' --exclude='pgsql_tmp' * | $compress_bin | ssh ${ssh_user:+$ssh_user@}$target "cat > $backup_dir/pgdata.tar.$compress_suffix"
 	    rc=(${PIPESTATUS[*]})
 	    tar_rc=${rc[0]}
 	    compress_rc=${rc[1]}
@@ -364,7 +368,7 @@ case $storage in
 	# Tar the tablespaces
 	while read line ; do
 	    name=`echo $line | cut -d '|' -f 1`
-	    _name=`echo $name | sed -re 's/\s+/_/g'` # No space version, we want paths without spaces
+	    _name=`echo $name | sed -E -e 's/[[:space:]]+/_/g'` # No space version, we want paths without spaces
 	    location=`echo $line | cut -d '|' -f 2`
 
 	    # Skip empty locations used for pg_default and pg_global, which are in PGDATA
@@ -385,7 +389,7 @@ case $storage in
             # unique.
 	    info "archiving $location"
 	    if [ $local_backup = "yes" ]; then
-		tar -cpf - --ignore-failed-read --exclude='pgsql_tmp' * 2>/dev/null | $compress_bin > $backup_dir/tblspc/${_name}.tar.$compress_suffix
+		gnutar -cpf - --ignore-failed-read --exclude='pgsql_tmp' * | $compress_bin > $backup_dir/tblspc/${_name}.tar.$compress_suffix
 		rc=(${PIPESTATUS[*]})
 		tar_rc=${rc[0]}
 		compress_rc=${rc[1]}
@@ -393,7 +397,7 @@ case $storage in
 		    error_and_hook "could not tar tablespace \"$name\""
 		fi
 	    else
-		tar -cpf - --ignore-failed-read --exclude='pgsql_tmp' * 2>/dev/null | $compress_bin | ssh ${ssh_user:+$ssh_user@}$target "cat > $backup_dir/tblspc/${_name}.tar.$compress_suffix" 2>/dev/null
+		gnutar -cpf - --ignore-failed-read --exclude='pgsql_tmp' * | $compress_bin | ssh ${ssh_user:+$ssh_user@}$target "cat > $backup_dir/tblspc/${_name}.tar.$compress_suffix"
 		rc=(${PIPESTATUS[*]})
 		tar_rc=${rc[0]}
 		compress_rc=${rc[1]}
@@ -462,7 +466,7 @@ case $storage in
 	# backup directory if possible, then rsync.
 	while read line; do
 	    name=`echo "$line" | cut -d '|' -f 1`
-	    _name=`echo "$name" | sed -re 's/\s+/_/g'` # No space version, we want paths without spaces
+	    _name=`echo "$name" | sed -E -e 's/[[:space:]]+/_/g'` # No space version, we want paths without spaces
 	    location=`echo "$line" | cut -d '|' -f 2`
 
 	    # Skip empty locations used for pg_default and pg_global, which are in PGDATA
@@ -540,14 +544,14 @@ fi
 
 # Ask PostgreSQL where are its configuration file. When they are
 # outside PGDATA, copy them in the backup
-_pgdata=`readlink -f $pgdata`
+_pgdata=$(readlink-f $pgdata)
 file_list=`$psql_command -Atc "SELECT setting FROM pg_settings WHERE name IN ('config_file', 'hba_file', 'ident_file');" $psql_condb`
 if [ $? != 0 ]; then
     warn "could not get the list of configuration files from PostgreSQL"
 fi
 
 for f in $file_list; do
-    file=`readlink -f $f`
+    file=$(readlink-f $f)
     echo $file | grep -q "^$_pgdata"
     if [ $? != 0 ]; then
 	# the file in not inside PGDATA, copy it

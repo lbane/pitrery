@@ -160,8 +160,10 @@ done | sort -n -t '|' -k 1 > $backup_list
 # youngest backups from the list.
 remove_list=$tmp_dir/remove_list
 cat /dev/null > $remove_list
-if [ -n "$max_count" ] && [ "$max_count" -ge 0 ]; then
-    head -n -$max_count $backup_list > $remove_list
+if [ -n "$max_count" ] && [ "$max_count" -ge 1 ]; then
+    # head -n -$max_count $backup_list > $remove_list
+    # awk -v sz="$(wc -l < $backup_list)" "NR<=(sz-${max_count})" $backup_list > $remove_list
+    tail -r $backup_list | sed -e "1,$max_count d" | tail -r > $remove_list
 else
     cp $backup_list $remove_list
 fi
@@ -271,7 +273,7 @@ for wal in $wal_list; do
     # filename without compression suffix
     echo $file | grep -qE '\.(backup|history)$'
     if [ $? != 0 ]; then
-	w=`echo $file | sed -r -e 's/\.[^\.]+$//'`
+	w=`echo $file | sed -E -e 's/\.[^\.]+$//'`
     else
 	w=$file
     fi

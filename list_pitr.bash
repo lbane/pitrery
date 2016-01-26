@@ -114,7 +114,7 @@ for dir in $list; do
 	    if [ -d "$dir/pgdata" ]; then
 		echo "  storage: rsync"
 	    else
-		suffix=`ls $dir/pgdata.tar.* 2>/dev/null | sed -r -e 's/.*\.tar\.(.+)$/\1/'`
+		suffix=`ls $dir/pgdata.tar.* 2>/dev/null | sed -E -e 's/.*\.tar\.(.+)$/\1/'`
 		[ -z "$suffix" ] && suffix="unknown"
 		echo "  storage: tar with $suffix compression"
 	    fi
@@ -177,7 +177,7 @@ for dir in $list; do
 	    if [ $? = 0 ]; then
 		echo "  storage: rsync"
 	    else
-		suffix=`ssh ${ssh_user:+$ssh_user@}$host "ls $dir/pgdata.tar.*" 2>/dev/null | sed -r -e 's/.*\.tar\.(.+)$/\1/'`
+		suffix=`ssh ${ssh_user:+$ssh_user@}$host "ls $dir/pgdata.tar.*" 2>/dev/null | sed -E -e 's/.*\.tar\.(.+)$/\1/'`
 		[ -z "$suffix" ] && suffix="unknown"
 		echo "  storage: tar with $suffix compression"
 	    fi

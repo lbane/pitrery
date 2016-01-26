@@ -569,7 +569,7 @@ fi
 if [ -f "$tblspc_reloc" ]; then
     while read l; do
 	name=`echo $l | cut -d '|' -f 1`
-	_name=`echo $name | sed -re 's/\s+/_/g'` # No space version, we want paths without spaces
+	_name=`echo $name | sed -E -e 's/[[:space:]]+/_/g'` # No space version, we want paths without spaces
 	tbldir=`echo $l | cut -d '|' -f 2`
 	oid=`echo $l | cut -d '|' -f 3`
 	reloc=`echo $l | cut -d '|' -f 4`
